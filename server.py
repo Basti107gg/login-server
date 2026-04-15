@@ -127,7 +127,7 @@ def admin():
 
     <hr>
 
-    <h2>📦 Accounts (Klick = Passwort anzeigen)</h2>
+    <h2>📦 Accounts</h2>
 
     <ul>
     {% for user, pw in accounts.items() %}
