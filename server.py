@@ -1,10 +1,15 @@
-from flask import Flask, request, jsonify, render_template_string
+# server.py
+from flask import Flask, request, jsonify, render_template_string, redirect
 import json
 import os
+import shutil
 
 app = Flask(__name__)
 
 DB_FILE = "accounts.json"
+BACKUP_FILE = "accounts_backup.json"
+
+ADMIN_PASSWORD = "29a10C00"
 
 # =========================
 # LOAD / SAVE
@@ -18,17 +23,25 @@ def load_accounts():
         with open(DB_FILE, "r") as f:
             return json.load(f)
     except:
+        if os.path.exists(BACKUP_FILE):
+            with open(BACKUP_FILE, "r") as f:
+                return json.load(f)
         return {}
 
 def save_accounts(data):
+    if os.path.exists(DB_FILE):
+        shutil.copy(DB_FILE, BACKUP_FILE)
+
     with open(DB_FILE, "w") as f:
         json.dump(data, f, indent=4)
+        f.flush()
+        os.fsync(f.fileno())
 
 # =========================
-# LOGIN API (für dein Programm)
+# LOGIN API
 # =========================
 @app.route("/login", methods=["POST"])
-def login_api():
+def login():
     data = request.json
     user = data.get("username")
     pw = data.get("password")
@@ -37,25 +50,22 @@ def login_api():
 
     if user in accounts and accounts[user] == pw:
         return jsonify({"status": "ok"})
-
     return jsonify({"status": "error"})
 
 # =========================
-# ADMIN LOGIN SEITE
+# ADMIN LOGIN
 # =========================
-ADMIN_PASSWORD = "29a10C00"
-
 @app.route("/admin-login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
         if request.form.get("password") == ADMIN_PASSWORD:
-            return "<h2>Login OK</h2><a href='/admin'>Go Admin Panel</a>"
-        return "Wrong password", 403
+            return redirect("/admin")
+        return "❌ Falsches Passwort"
 
     return """
-    <h1>ADMIN LOGIN</h1>
+    <h2>🔒 Admin Login</h2>
     <form method="post">
-        <input name="password" placeholder="Admin Passwort">
+        <input type="password" name="password">
         <button>Login</button>
     </form>
     """
@@ -67,64 +77,71 @@ def admin_login():
 def admin():
     accounts = load_accounts()
 
-    if request.method == "POST":
-        if request.form.get("admin") != ADMIN_PASSWORD:
-            return "Wrong password", 403
+    if request.method == "POST" and "create" in request.form:
+        user = request.form.get("username")
+        pw = request.form.get("password")
 
-        if "create" in request.form:
-            user = request.form.get("user")
-            pw = request.form.get("pw")
+        if user and pw:
+            accounts[user] = pw
+            save_accounts(accounts)
 
-            if user and pw:
-                accounts[user] = pw
-                save_accounts(accounts)
-
-        if "delete" in request.form:
-            user = request.form.get("delete")
-            if user in accounts:
-                del accounts[user]
-                save_accounts(accounts)
-
-    accounts = load_accounts()
+    if request.method == "POST" and "delete" in request.form:
+        user = request.form.get("delete")
+        if user in accounts:
+            del accounts[user]
+            save_accounts(accounts)
 
     return render_template_string("""
     <h1>ADMIN PANEL</h1>
 
+    <h2>➕ Account erstellen</h2>
     <form method="post">
-        <input name="admin" placeholder="Admin Passwort">
-        <button>Login</button>
+        <input name="username"><br><br>
+        <input name="password"><br><br>
+        <button name="create">Erstellen</button>
     </form>
 
     <hr>
 
-    <h2>Create Account</h2>
+    <h2>🗑 Account löschen</h2>
     <form method="post">
-        <input name="user" placeholder="Username">
-        <input name="pw" placeholder="Password">
-        <button name="create">Create</button>
-    </form>
-
-    <h2>Delete Account</h2>
-    <form method="post">
-        <input name="delete" placeholder="Username">
-        <button>Delete</button>
+        <input name="delete">
+        <button>Löschen</button>
     </form>
 
     <hr>
 
-    <h2>Accounts</h2>
+    <h2>📦 Accounts (Klick = Passwort anzeigen)</h2>
+
     <ul>
-    {% for u in accounts %}
-        <li>{{u}} : {{accounts[u]}}</li>
+    {% for user, pw in accounts.items() %}
+        <li onclick="toggle('{{user}}')" style="cursor:pointer;">
+            <b>{{user}}</b>
+            <div id="{{user}}" style="display:none; margin-left:20px;">
+                Passwort: {{pw}}
+            </div>
+        </li>
     {% endfor %}
     </ul>
 
-    <br>
-    <a href="/admin-login">Back</a>
+    <script>
+    function toggle(user){
+        let el = document.getElementById(user);
+        el.style.display = (el.style.display === "none") ? "block" : "none";
+    }
+    </script>
     """, accounts=accounts)
+
+# =========================
+# HOME
+# =========================
+@app.route("/")
+def home():
+    return redirect("/admin-login")
 
 # =========================
 # START
 # =========================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
