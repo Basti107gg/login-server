@@ -34,7 +34,7 @@ GITHUB_FILE = "accounts.json"
 
 def load_github():
     try:
-        url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/{GITHUB_FILE}"
+        url = f"https://raw.githubusercontent.com/{Basti107gg}/{login-serve}/main/{Accounts.json}"
         r = requests.get(url, timeout=5)
 
         if r.status_code == 200:
