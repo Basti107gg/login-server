@@ -4,9 +4,6 @@ import os
 
 app = Flask(__name__)
 
-# =========================
-# DATEI (LOKAL + DAUERHAFT)
-# =========================
 DB_FILE = "accounts.json"
 
 def load_accounts():
@@ -14,11 +11,8 @@ def load_accounts():
         with open(DB_FILE, "w") as f:
             json.dump({}, f)
 
-    try:
-        with open(DB_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return {}
+    with open(DB_FILE, "r") as f:
+        return json.load(f)
 
 def save_accounts(data):
     with open(DB_FILE, "w") as f:
@@ -37,77 +31,89 @@ def login():
 
     if user in accounts and accounts[user] == pw:
         return jsonify({"status": "ok"})
-
     return jsonify({"status": "error"})
 
 # =========================
 # ADMIN PANEL
 # =========================
-ADMIN_PASSWORD = "29a10C00"
-
 @app.route("/", methods=["GET", "POST"])
 def admin():
     accounts = load_accounts()
 
-    # Admin check
-    if request.method == "POST":
-        if request.form.get("admin") != ADMIN_PASSWORD:
-            return "Wrong password", 403
+    # CREATE
+    if request.method == "POST" and "create" in request.form:
+        user = request.form.get("username")
+        pw = request.form.get("password")
 
-        # CREATE
-        if "create" in request.form:
-            user = request.form.get("user")
-            pw = request.form.get("pw")
+        if user and pw:
+            accounts[user] = pw
+            save_accounts(accounts)
 
-            if user and pw:
-                accounts[user] = pw
-                save_accounts(accounts)
-
-        # DELETE
-        if "delete" in request.form:
-            user = request.form.get("delete")
-
-            if user in accounts:
-                del accounts[user]
-                save_accounts(accounts)
-
-    accounts = load_accounts()
+    # DELETE
+    if request.method == "POST" and "delete" in request.form:
+        user = request.form.get("delete")
+        if user in accounts:
+            del accounts[user]
+            save_accounts(accounts)
 
     return render_template_string("""
+    <html>
+    <head>
+    <script>
+        function togglePassword(user) {
+            let el = document.getElementById("pw_" + user);
+            if (el.style.display === "none") {
+                el.style.display = "block";
+            } else {
+                el.style.display = "none";
+            }
+        }
+    </script>
+    </head>
+
+    <body>
     <h1>ADMIN PANEL</h1>
 
+    <h2>➕ Account erstellen</h2>
     <form method="post">
-        <input name="admin" placeholder="Admin Passwort">
-        <button>Login</button>
+        <input name="username" placeholder="Username"><br><br>
+        <input name="password" placeholder="Password"><br><br>
+        <button name="create">Erstellen</button>
     </form>
 
     <hr>
 
-    <h2>Create Account</h2>
-    <form method="post">
-        <input name="user" placeholder="Username">
-        <input name="pw" placeholder="Password">
-        <button name="create">Create</button>
-    </form>
-
-    <h2>Delete Account</h2>
+    <h2>🗑 Account löschen</h2>
     <form method="post">
         <input name="delete" placeholder="Username">
-        <button>Delete</button>
+        <button>Löschen</button>
     </form>
 
     <hr>
 
-    <h2>Accounts</h2>
+    <h2>📦 Accounts (klick zum anzeigen)</h2>
+
     <ul>
-    {% for u in accounts %}
-        <li>{{u}} : {{accounts[u]}}</li>
+    {% for user, pw in accounts.items() %}
+        <li>
+            <b onclick="togglePassword('{{user}}')" style="cursor:pointer;color:blue;">
+                {{user}}
+            </b>
+
+            <div id="pw_{{user}}" style="display:none;margin-left:20px;">
+                🔑 Passwort: {{pw}}
+            </div>
+        </li>
     {% endfor %}
     </ul>
+
+    </body>
+    </html>
     """, accounts=accounts)
 
 # =========================
-# START SERVER
+# START
 # =========================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
