@@ -1,63 +1,31 @@
 from flask import Flask, request, jsonify, render_template_string
 import json
 import os
-import requests
 
 app = Flask(__name__)
 
 # =========================
-# LOKALE DATEI
+# LOCAL DATABASE
 # =========================
 DB_FILE = "accounts.json"
 
-def load_local():
+def load_accounts():
     if not os.path.exists(DB_FILE):
         with open(DB_FILE, "w") as f:
             json.dump({}, f)
 
-    with open(DB_FILE, "r") as f:
-        try:
+    try:
+        with open(DB_FILE, "r") as f:
             return json.load(f)
-        except:
-            return {}
+    except:
+        return {}
 
-def save_local(data):
+def save_accounts(data):
     with open(DB_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
 # =========================
-# GITHUB LOAD (READ ONLY)
-# =========================
-GITHUB_USER = "Basti107gg"
-GITHUB_REPO = "login-server"
-GITHUB_FILE = "accounts.json"
-
-def load_github():
-    try:
-        url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/{GITHUB_FILE}"
-        r = requests.get(url, timeout=5)
-
-        if r.status_code == 200:
-            return json.loads(r.text)
-
-    except:
-        pass
-
-    return {}
-
-# =========================
-# MERGE
-# =========================
-def load_accounts():
-    local = load_local()
-    github = load_github()
-
-    merged = github.copy()
-    merged.update(local)
-    return merged
-
-# =========================
-# LOGIN
+# LOGIN API
 # =========================
 @app.route("/login", methods=["POST"])
 def login():
@@ -69,53 +37,42 @@ def login():
 
     if user in accounts and accounts[user] == pw:
         return jsonify({"status": "ok"})
-
-    return jsonify({"status": "error"})
+    else:
+        return jsonify({"status": "error"})
 
 # =========================
-# ADMIN
+# ADMIN PANEL
 # =========================
-ADMIN_PASSWORD = "29a10C00"
-
 @app.route("/", methods=["GET", "POST"])
 def admin():
-    if request.method == "POST":
-        if request.form.get("admin") != ADMIN_PASSWORD:
-            return "Wrong password", 403
-
-        local = load_local()
-
-        if "create" in request.form:
-            user = request.form.get("user")
-            pw = request.form.get("pw")
-            if user and pw:
-                local[user] = pw
-                save_local(local)
-
-        if "delete" in request.form:
-            user = request.form.get("delete")
-            if user in local:
-                del local[user]
-                save_local(local)
-
     accounts = load_accounts()
+
+    if request.method == "POST":
+        user = request.form.get("username")
+        pw = request.form.get("password")
+
+        if user and pw:
+            accounts[user] = pw
+            save_accounts(accounts)
+
+        # DELETE (optional simple fix)
+        delete_user = request.form.get("delete")
+        if delete_user:
+            if delete_user in accounts:
+                del accounts[delete_user]
+                save_accounts(accounts)
 
     return render_template_string("""
     <h1>ADMIN PANEL</h1>
 
+    <h2>Create Account</h2>
     <form method="post">
-        <input name="admin" placeholder="Admin Passwort">
-        <button>Login</button>
+        <input name="username" placeholder="Username"><br><br>
+        <input name="password" placeholder="Password"><br><br>
+        <button>Create</button>
     </form>
 
     <hr>
-
-    <h2>Create Account</h2>
-    <form method="post">
-        <input name="user" placeholder="Username">
-        <input name="pw" placeholder="Password">
-        <button name="create">Create</button>
-    </form>
 
     <h2>Delete Account</h2>
     <form method="post">
@@ -127,8 +84,8 @@ def admin():
 
     <h2>Accounts</h2>
     <ul>
-    {% for u in accounts %}
-        <li>{{u}} : {{accounts[u]}}</li>
+    {% for user in accounts %}
+        <li>{{user}} : {{accounts[user]}}</li>
     {% endfor %}
     </ul>
     """, accounts=accounts)
