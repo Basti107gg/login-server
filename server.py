@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify, render_template_string, redirect
 import json
 import os
 import shutil
+import time
 
 app = Flask(__name__)
 
@@ -12,7 +13,7 @@ BACKUP_FILE = "accounts_backup.json"
 ADMIN_PASSWORD = "29a10C00"
 
 # =========================
-# LOAD ACCOUNTS (MIT BACKUP)
+# LOAD / SAVE
 # =========================
 def load_accounts():
     if not os.path.exists(DB_FILE):
@@ -23,17 +24,12 @@ def load_accounts():
         with open(DB_FILE, "r") as f:
             return json.load(f)
     except:
-        # Falls kaputt → Backup laden
         if os.path.exists(BACKUP_FILE):
             with open(BACKUP_FILE, "r") as f:
                 return json.load(f)
         return {}
 
-# =========================
-# SAVE ACCOUNTS (MIT BACKUP)
-# =========================
 def save_accounts(data):
-    # Backup erstellen
     if os.path.exists(DB_FILE):
         shutil.copy(DB_FILE, BACKUP_FILE)
 
@@ -43,7 +39,7 @@ def save_accounts(data):
         os.fsync(f.fileno())
 
 # =========================
-# LOGIN API (für Programme)
+# LOGIN (MIT IP TRACKING)
 # =========================
 @app.route("/login", methods=["POST"])
 def login():
@@ -53,27 +49,36 @@ def login():
 
     accounts = load_accounts()
 
-    if user in accounts and accounts[user] == pw:
+    if user in accounts and accounts[user]["password"] == pw:
+        ip = request.remote_addr
+        now = int(time.time())
+
+        # neue IP hinzufügen oder updaten
+        if ip not in accounts[user]["ips"]:
+            accounts[user]["ips"][ip] = now
+        else:
+            accounts[user]["ips"][ip] = now
+
+        save_accounts(accounts)
+
         return jsonify({"status": "ok"})
+
     return jsonify({"status": "error"})
 
 # =========================
-# ADMIN LOGIN PAGE
+# ADMIN LOGIN
 # =========================
 @app.route("/admin-login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
-        pw = request.form.get("password")
-
-        if pw == ADMIN_PASSWORD:
+        if request.form.get("password") == ADMIN_PASSWORD:
             return redirect("/admin")
-        else:
-            return "❌ Falsches Passwort!"
+        return "❌ Falsches Passwort"
 
     return """
     <h2>🔒 Admin Login</h2>
     <form method="post">
-        <input type="password" name="password" placeholder="Passwort"><br><br>
+        <input type="password" name="password">
         <button>Login</button>
     </form>
     """
@@ -91,7 +96,10 @@ def admin():
         pw = request.form.get("password")
 
         if user and pw:
-            accounts[user] = pw
+            accounts[user] = {
+                "password": pw,
+                "ips": {}
+            }
             save_accounts(accounts)
 
     # DELETE
@@ -101,13 +109,15 @@ def admin():
             del accounts[user]
             save_accounts(accounts)
 
+    now = int(time.time())
+
     return render_template_string("""
     <h1>ADMIN PANEL</h1>
 
     <h2>➕ Account erstellen</h2>
     <form method="post">
-        <input name="username" placeholder="Username"><br><br>
-        <input name="password" placeholder="Password"><br><br>
+        <input name="username"><br><br>
+        <input name="password"><br><br>
         <button name="create">Erstellen</button>
     </form>
 
@@ -115,39 +125,48 @@ def admin():
 
     <h2>🗑 Account löschen</h2>
     <form method="post">
-        <input name="delete" placeholder="Username">
+        <input name="delete">
         <button>Löschen</button>
     </form>
 
     <hr>
 
-    <h2>📦 Accounts </h2>
+    <h2>📦 Accounts</h2>
 
     <ul>
-    {% for user in accounts %}
+    {% for user, data in accounts.items() %}
         <li onclick="toggle('{{user}}')" style="cursor:pointer;">
-            {{user}} :
-            <span id="{{user}}" style="display:none;">{{accounts[user]}}</span>
-            <span id="hidden_{{user}}">********</span>
+            <b>{{user}}</b>
+            <div id="{{user}}" style="display:none; margin-left:20px;">
+                Passwort: {{data.password}}<br>
+                IPs:<br>
+                {% for ip, last in data.ips.items() %}
+                    {% if now - last < 120 %}
+                        🟢 {{ip}} (aktiv)
+                    {% else %}
+                        ⚪ {{ip}}
+                    {% endif %}
+                    <br>
+                {% endfor %}
+            </div>
         </li>
     {% endfor %}
     </ul>
 
     <script>
     function toggle(user){
-        let pw = document.getElementById(user);
-        let hidden = document.getElementById("hidden_" + user);
-
-        if(pw.style.display === "none"){
-            pw.style.display = "inline";
-            hidden.style.display = "none";
-        } else {
-            pw.style.display = "none";
-            hidden.style.display = "inline";
-        }
+        let el = document.getElementById(user);
+        el.style.display = (el.style.display === "none") ? "block" : "none";
     }
     </script>
-    """, accounts=accounts)
+    """, accounts=accounts, now=now)
+
+# =========================
+# HOME REDIRECT
+# =========================
+@app.route("/")
+def home():
+    return redirect("/admin-login")
 
 # =========================
 # START
