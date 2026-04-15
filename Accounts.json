@@ -2,15 +2,25 @@
 from flask import Flask, request, jsonify, render_template_string
 import json
 import os
+import shutil
 
 app = Flask(__name__)
 
-DB_FILE = "accounts.json"
+# =========================
+# STORAGE PATH (IMMER SICHER)
+# =========================
+if os.path.exists("/data"):
+    DB_FILE = "/data/accounts.json"
+    BACKUP_FILE = "/data/accounts_backup.json"
+else:
+    DB_FILE = "accounts.json"
+    BACKUP_FILE = "accounts_backup.json"
 
 # =========================
-# LOAD ACCOUNTS (SAFE)
+# LOAD ACCOUNTS (MIT BACKUP)
 # =========================
 def load_accounts():
+    # Datei erstellen falls nicht vorhanden
     if not os.path.exists(DB_FILE):
         with open(DB_FILE, "w") as f:
             json.dump({}, f)
@@ -18,15 +28,35 @@ def load_accounts():
     try:
         with open(DB_FILE, "r") as f:
             return json.load(f)
+
     except:
+        print("⚠️ Hauptdatei kaputt → versuche Backup...")
+
+        # Backup wiederherstellen
+        if os.path.exists(BACKUP_FILE):
+            try:
+                shutil.copy(BACKUP_FILE, DB_FILE)
+                with open(DB_FILE, "r") as f:
+                    return json.load(f)
+            except:
+                pass
+
+        # Notfall: leere Datei
         return {}
 
 # =========================
-# SAVE ACCOUNTS (SAFE + FORCE FLUSH)
+# SAVE ACCOUNTS (MIT BACKUP + FORCE SAVE)
 # =========================
 def save_accounts(data):
+    # Backup erstellen
+    if os.path.exists(DB_FILE):
+        shutil.copy(DB_FILE, BACKUP_FILE)
+
+    # Speichern
     with open(DB_FILE, "w") as f:
         json.dump(data, f, indent=4)
+
+        # 💥 EXTREM WICHTIG → verhindert Datenverlust
         f.flush()
         os.fsync(f.fileno())
 
@@ -46,13 +76,13 @@ def login():
     return jsonify({"status": "error"})
 
 # =========================
-# ADMIN PAGE (CREATE + DELETE)
+# ADMIN PANEL
 # =========================
 @app.route("/", methods=["GET", "POST"])
 def admin():
     accounts = load_accounts()
 
-    # CREATE ACCOUNT
+    # ➕ ACCOUNT ERSTELLEN
     if request.method == "POST" and "create" in request.form:
         user = request.form.get("username")
         pw = request.form.get("password")
@@ -61,7 +91,7 @@ def admin():
             accounts[user] = pw
             save_accounts(accounts)
 
-    # DELETE ACCOUNT
+    # 🗑 ACCOUNT LÖSCHEN
     if request.method == "POST" and "delete" in request.form:
         user = request.form.get("delete")
         if user in accounts:
