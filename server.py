@@ -1,13 +1,12 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template_string
 import json
 import os
 import requests
-import base64
 
 app = Flask(__name__)
 
 # =========================
-# LOKALE DATEI
+# LOKALE DATEI (SICHER + DAUERHAFT)
 # =========================
 DB_FILE = "accounts.json"
 
@@ -17,42 +16,37 @@ def load_local():
             json.dump({}, f)
 
     with open(DB_FILE, "r") as f:
-        return json.load(f)
+        try:
+            return json.load(f)
+        except:
+            return {}
 
 def save_local(data):
     with open(DB_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
 # =========================
-# GITHUB CONFIG (WICHTIG ANPASSEN)
+# GITHUB (PUBLIC READ ONLY)
 # =========================
-GITHUB_REPO = "Basti107gg/login-server"
+GITHUB_USER = "Basti107gg"
+GITHUB_REPO = "login-server"
 GITHUB_FILE = "accounts.json"
-GITHUB_TOKEN = "DEIN_TOKEN_HIER"  # nur nötig wenn schreiben, lesen geht ohne
 
-# =========================
-# GITHUB LOAD (READ ONLY)
-# =========================
 def load_github():
     try:
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE}"
+        url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/{GITHUB_FILE}"
+        r = requests.get(url, timeout=5)
 
-        r = requests.get(url, headers={
-            "Accept": "application/vnd.github.v3+json"
-        })
-
-        if r.status_code != 200:
-            return {}
-
-        data = r.json()
-        content = base64.b64decode(data["content"]).decode("utf-8")
-        return json.loads(content)
+        if r.status_code == 200:
+            return r.json()
 
     except:
-        return {}
+        pass
+
+    return {}
 
 # =========================
-# MERGE ACCOUNTS
+# ACCOUNTS MERGE (GITHUB + LOKAL)
 # =========================
 def load_accounts():
     local = load_local()
@@ -63,7 +57,7 @@ def load_accounts():
     return merged
 
 # =========================
-# LOGIN
+# LOGIN SYSTEM
 # =========================
 @app.route("/login", methods=["POST"])
 def login():
@@ -79,33 +73,41 @@ def login():
     return jsonify({"status": "error"})
 
 # =========================
-# ADMIN (CREATE + DELETE)
+# ADMIN PANEL
 # =========================
 ADMIN_PASSWORD = "29a10C00"
 
 @app.route("/", methods=["GET", "POST"])
 def admin():
+    accounts = load_accounts()
+
+    # Admin check
     if request.method == "POST":
         if request.form.get("admin") != ADMIN_PASSWORD:
             return "Wrong password", 403
 
-        accounts = load_local()
+        local = load_local()
 
+        # CREATE ACCOUNT
         if "create" in request.form:
-            u = request.form.get("user")
-            p = request.form.get("pw")
-            accounts[u] = p
-            save_local(accounts)
+            user = request.form.get("user")
+            pw = request.form.get("pw")
 
+            if user and pw:
+                local[user] = pw
+                save_local(local)
+
+        # DELETE ACCOUNT
         if "delete" in request.form:
-            u = request.form.get("delete")
-            if u in accounts:
-                del accounts[u]
-                save_local(accounts)
+            user = request.form.get("delete")
+
+            if user in local:
+                del local[user]
+                save_local(local)
 
     accounts = load_accounts()
 
-    html = """
+    return render_template_string("""
     <h1>ADMIN PANEL</h1>
 
     <form method="post">
@@ -115,32 +117,31 @@ def admin():
 
     <hr>
 
-    <h3>Create</h3>
+    <h2>Create Account</h2>
     <form method="post">
-        <input name="user" placeholder="User">
-        <input name="pw" placeholder="Pass">
-        <button name="create">Add</button>
+        <input name="user" placeholder="Username">
+        <input name="pw" placeholder="Password">
+        <button name="create">Create</button>
     </form>
 
-    <h3>Delete</h3>
+    <h2>Delete Account</h2>
     <form method="post">
-        <input name="delete" placeholder="User">
+        <input name="delete" placeholder="Username">
         <button>Delete</button>
     </form>
 
     <hr>
 
-    <h3>Accounts</h3>
+    <h2>Accounts</h2>
+    <ul>
     {% for u in accounts %}
-        <p>{{u}} : {{accounts[u]}}</p>
+        <li>{{u}} : {{accounts[u]}}</li>
     {% endfor %}
-    """
-
-    from flask import render_template_string
-    return render_template_string(html, accounts=accounts)
+    </ul>
+    """, accounts=accounts)
 
 # =========================
-# START
+# START SERVER
 # =========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
