@@ -4,11 +4,11 @@ import os
 
 app = Flask(__name__)
 
-# =========================
-# DATEI
-# =========================
 DB_FILE = "accounts.json"
 
+# =========================
+# LOAD / SAVE
+# =========================
 def load_accounts():
     if not os.path.exists(DB_FILE):
         with open(DB_FILE, "w") as f:
@@ -25,7 +25,7 @@ def save_accounts(data):
         json.dump(data, f, indent=4)
 
 # =========================
-# LOGIN API
+# LOGIN API (für dein Programm)
 # =========================
 @app.route("/login", methods=["POST"])
 def login_api():
@@ -41,55 +41,23 @@ def login_api():
     return jsonify({"status": "error"})
 
 # =========================
-# LOGIN SEITE (ADMIN LOGIN)
+# ADMIN LOGIN SEITE
 # =========================
 ADMIN_PASSWORD = "29a10C00"
 
-@app.route("/login", methods=["GET", "POST"])
-def login_page():
+@app.route("/admin-login", methods=["GET", "POST"])
+def admin_login():
     if request.method == "POST":
-        if request.form.get("admin") == ADMIN_PASSWORD:
-            return """
-            <h2>Login OK</h2>
-            <a href='/admin'>Go Admin Panel</a>
-            """
+        if request.form.get("password") == ADMIN_PASSWORD:
+            return "<h2>Login OK</h2><a href='/admin'>Go Admin Panel</a>"
         return "Wrong password", 403
 
     return """
-    <h1>LOGIN</h1>
+    <h1>ADMIN LOGIN</h1>
     <form method="post">
-        <input name="admin" placeholder="Admin Passwort">
+        <input name="password" placeholder="Admin Passwort">
         <button>Login</button>
     </form>
-    """
-
-# =========================
-# ACCOUNT ERSTELLEN SEITE
-# =========================
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    accounts = load_accounts()
-
-    if request.method == "POST":
-        user = request.form.get("user")
-        pw = request.form.get("pw")
-
-        if user and pw:
-            accounts[user] = pw
-            save_accounts(accounts)
-            return "<h2>Account erstellt!</h2><a href='/register'>Zurück</a>"
-
-    return """
-    <h1>ACCOUNT ERSTELLEN</h1>
-
-    <form method="post">
-        <input name="user" placeholder="Username"><br><br>
-        <input name="pw" placeholder="Password"><br><br>
-        <button>Create</button>
-    </form>
-
-    <br>
-    <a href='/login'>Admin Login</a>
     """
 
 # =========================
@@ -102,6 +70,14 @@ def admin():
     if request.method == "POST":
         if request.form.get("admin") != ADMIN_PASSWORD:
             return "Wrong password", 403
+
+        if "create" in request.form:
+            user = request.form.get("user")
+            pw = request.form.get("pw")
+
+            if user and pw:
+                accounts[user] = pw
+                save_accounts(accounts)
 
         if "delete" in request.form:
             user = request.form.get("delete")
@@ -121,6 +97,13 @@ def admin():
 
     <hr>
 
+    <h2>Create Account</h2>
+    <form method="post">
+        <input name="user" placeholder="Username">
+        <input name="pw" placeholder="Password">
+        <button name="create">Create</button>
+    </form>
+
     <h2>Delete Account</h2>
     <form method="post">
         <input name="delete" placeholder="Username">
@@ -137,7 +120,7 @@ def admin():
     </ul>
 
     <br>
-    <a href="/register">Account erstellen</a>
+    <a href="/admin-login">Back</a>
     """, accounts=accounts)
 
 # =========================
