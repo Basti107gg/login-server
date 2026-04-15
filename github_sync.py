@@ -1,16 +1,20 @@
 import json
 import requests
 
-GITHUB_API = "https://api.github.com/repos/Basti107gg/login-server/contents/accounts.json"
+GITHUB_REPO = "Basti107gg/login-server"
+FILE_PATH = "accounts.json"
 TOKEN = "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"
 
 def upload(data):
-    content = json.dumps(data, indent=4).encode().decode("utf-8")
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{FILE_PATH}"
+
+    content = json.dumps(data, indent=4)
 
     r = requests.put(
-        GITHUB_API,
+        url,
         headers={
-            "Authorization": f"token {TOKEN}"
+            "Authorization": f"token {TOKEN}",
+            "Accept": "application/vnd.github.v3+json"
         },
         json={
             "message": "update accounts",
@@ -18,7 +22,6 @@ def upload(data):
         }
     )
 
-    print(r.text)
+    print(r.status_code, r.text)
 
-# example
-upload({"user": "pass"})
+upload({"Basti": "29a10C00"})
