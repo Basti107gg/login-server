@@ -1,44 +1,53 @@
-# server.py
-from flask import Flask, request, jsonify, render_template_string, redirect
+from flask import Flask, request, jsonify
 import json
 import os
-import shutil
+import requests
+import base64
 
 app = Flask(__name__)
 
 DB_FILE = "accounts.json"
-BACKUP_FILE = "accounts_backup.json"
-
-ADMIN_PASSWORD = "29a10C00"
 
 # =========================
-# LOAD / SAVE (STABIL)
+# LOKALE ACCOUNTS
 # =========================
 def load_accounts():
     if not os.path.exists(DB_FILE):
         with open(DB_FILE, "w") as f:
             json.dump({}, f)
 
-    try:
-        with open(DB_FILE, "r") as f:
-            return json.load(f)
-    except:
-        if os.path.exists(BACKUP_FILE):
-            with open(BACKUP_FILE, "r") as f:
-                return json.load(f)
-        return {}
-
-def save_accounts(data):
-    if os.path.exists(DB_FILE):
-        shutil.copy(DB_FILE, BACKUP_FILE)
-
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f, indent=4)
-        f.flush()
-        os.fsync(f.fileno())
+    with open(DB_FILE, "r") as f:
+        return json.load(f)
 
 # =========================
-# LOGIN API
+# GITHUB ACCOUNTS (READ ONLY)
+# =========================
+GITHUB_TOKEN = "DEIN_TOKEN"
+GITHUB_REPO = "USERNAME/REPO"
+GITHUB_FILE = "accounts.json"
+
+def load_github_accounts():
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE}"
+
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            return {}
+
+        data = r.json()
+        content = base64.b64decode(data["content"]).decode("utf-8")
+        return json.loads(content)
+
+    except:
+        return {}
+
+# =========================
+# LOGIN (LOKAL + GITHUB)
 # =========================
 @app.route("/login", methods=["POST"])
 def login():
@@ -46,104 +55,18 @@ def login():
     user = data.get("username")
     pw = data.get("password")
 
-    accounts = load_accounts()
+    local = load_accounts()
+    github = load_github_accounts()
+
+    accounts = {**local, **github}
 
     if user in accounts and accounts[user] == pw:
         return jsonify({"status": "ok"})
+
     return jsonify({"status": "error"})
-
-# =========================
-# ADMIN LOGIN
-# =========================
-@app.route("/admin-login", methods=["GET", "POST"])
-def admin_login():
-    if request.method == "POST":
-        if request.form.get("password") == ADMIN_PASSWORD:
-            return redirect("/admin")
-        return "❌ Falsches Passwort"
-
-    return """
-    <h2>🔒 Admin Login</h2>
-    <form method="post">
-        <input type="password" name="password">
-        <button>Login</button>
-    </form>
-    """
-
-# =========================
-# ADMIN PANEL
-# =========================
-@app.route("/admin", methods=["GET", "POST"])
-def admin():
-    accounts = load_accounts()
-
-    # CREATE
-    if request.method == "POST" and "create" in request.form:
-        user = request.form.get("username")
-        pw = request.form.get("password")
-
-        if user and pw:
-            accounts[user] = pw
-            save_accounts(accounts)
-
-    # DELETE
-    if request.method == "POST" and "delete" in request.form:
-        user = request.form.get("delete")
-        if user in accounts:
-            del accounts[user]
-            save_accounts(accounts)
-
-    return render_template_string("""
-    <h1>ADMIN PANEL</h1>
-
-    <h2>➕ Account erstellen</h2>
-    <form method="post">
-        <input name="username"><br><br>
-        <input name="password"><br><br>
-        <button name="create">Erstellen</button>
-    </form>
-
-    <hr>
-
-    <h2>🗑 Account löschen</h2>
-    <form method="post">
-        <input name="delete">
-        <button>Löschen</button>
-    </form>
-
-    <hr>
-
-    <h2>📦 Accounts</h2>
-
-    <ul>
-    {% for user, pw in accounts.items() %}
-        <li onclick="toggle('{{user}}')" style="cursor:pointer;">
-            <b>{{user}}</b>
-            <div id="{{user}}" style="display:none; margin-left:20px;">
-                Passwort: {{pw}}
-            </div>
-        </li>
-    {% endfor %}
-    </ul>
-
-    <script>
-    function toggle(user){
-        let el = document.getElementById(user);
-        el.style.display = (el.style.display === "none") ? "block" : "none";
-    }
-    </script>
-    """, accounts=accounts)
-
-# =========================
-# HOME
-# =========================
-@app.route("/")
-def home():
-    return redirect("/admin-login")
 
 # =========================
 # START
 # =========================
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=5000)
