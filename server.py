@@ -3,18 +3,20 @@ import json
 import os
 
 app = Flask(__name__)
+
 DB_FILE = "accounts.json"
 
 def load_accounts():
     if not os.path.exists(DB_FILE):
         with open(DB_FILE, "w") as f:
             json.dump({}, f)
+
     with open(DB_FILE, "r") as f:
         return json.load(f)
 
 def save_accounts(data):
     with open(DB_FILE, "w") as f:
-        json.dump(data, f)
+        json.dump(data, f, indent=4)
 
 # =========================
 # LOGIN API
@@ -29,17 +31,16 @@ def login():
 
     if user in accounts and accounts[user] == pw:
         return jsonify({"status": "ok"})
-    else:
-        return jsonify({"status": "error"})
+    return jsonify({"status": "error"})
 
 # =========================
-# ADMIN PAGE (CREATE + DELETE)
+# ADMIN PANEL
 # =========================
 @app.route("/", methods=["GET", "POST"])
 def admin():
     accounts = load_accounts()
 
-    # CREATE ACCOUNT
+    # CREATE
     if request.method == "POST" and "create" in request.form:
         user = request.form.get("username")
         pw = request.form.get("password")
@@ -48,7 +49,7 @@ def admin():
             accounts[user] = pw
             save_accounts(accounts)
 
-    # DELETE ACCOUNT
+    # DELETE
     if request.method == "POST" and "delete" in request.form:
         user = request.form.get("delete")
         if user in accounts:
@@ -56,8 +57,24 @@ def admin():
             save_accounts(accounts)
 
     return render_template_string("""
-    <h2>Account erstellen</h2>
+    <html>
+    <head>
+    <script>
+        function togglePassword(user) {
+            let el = document.getElementById("pw_" + user);
+            if (el.style.display === "none") {
+                el.style.display = "block";
+            } else {
+                el.style.display = "none";
+            }
+        }
+    </script>
+    </head>
 
+    <body>
+    <h1>ADMIN PANEL</h1>
+
+    <h2>➕ Account erstellen</h2>
     <form method="post">
         <input name="username" placeholder="Username"><br><br>
         <input name="password" placeholder="Password"><br><br>
@@ -66,23 +83,37 @@ def admin():
 
     <hr>
 
-    <h2>Accounts löschen</h2>
-
+    <h2>🗑 Account löschen</h2>
     <form method="post">
-        <input name="delete" placeholder="Username löschen">
+        <input name="delete" placeholder="Username">
         <button>Löschen</button>
     </form>
 
     <hr>
 
-    <h3>Accounts:</h3>
+    <h2>📦 Accounts (klick zum anzeigen)</h2>
+
     <ul>
-    {% for user in accounts %}
-        <li>{{user}}</li>
+    {% for user, pw in accounts.items() %}
+        <li>
+            <b onclick="togglePassword('{{user}}')" style="cursor:pointer;color:blue;">
+                {{user}}
+            </b>
+
+            <div id="pw_{{user}}" style="display:none;margin-left:20px;">
+                🔑 Passwort: {{pw}}
+            </div>
+        </li>
     {% endfor %}
     </ul>
+
+    </body>
+    </html>
     """, accounts=accounts)
 
+# =========================
+# START
+# =========================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
