@@ -16,6 +16,9 @@ def save_accounts(data):
     with open(DB_FILE, "w") as f:
         json.dump(data, f)
 
+# =========================
+# LOGIN API
+# =========================
 @app.route("/login", methods=["POST"])
 def login():
     data = request.json
@@ -29,27 +32,55 @@ def login():
     else:
         return jsonify({"status": "error"})
 
+# =========================
+# ADMIN PAGE (CREATE + DELETE)
+# =========================
 @app.route("/", methods=["GET", "POST"])
 def admin():
     accounts = load_accounts()
 
-    if request.method == "POST":
+    # CREATE ACCOUNT
+    if request.method == "POST" and "create" in request.form:
         user = request.form.get("username")
         pw = request.form.get("password")
 
-        accounts[user] = pw
-        save_accounts(accounts)
+        if user and pw:
+            accounts[user] = pw
+            save_accounts(accounts)
+
+    # DELETE ACCOUNT
+    if request.method == "POST" and "delete" in request.form:
+        user = request.form.get("delete")
+        if user in accounts:
+            del accounts[user]
+            save_accounts(accounts)
 
     return render_template_string("""
     <h2>Account erstellen</h2>
+
     <form method="post">
-        Username: <input name="username"><br><br>
-        Passwort: <input name="password"><br><br>
-        <button>Erstellen</button>
+        <input name="username" placeholder="Username"><br><br>
+        <input name="password" placeholder="Password"><br><br>
+        <button name="create">Erstellen</button>
     </form>
+
     <hr>
+
+    <h2>Accounts löschen</h2>
+
+    <form method="post">
+        <input name="delete" placeholder="Username löschen">
+        <button>Löschen</button>
+    </form>
+
+    <hr>
+
     <h3>Accounts:</h3>
-    {{accounts}}
+    <ul>
+    {% for user in accounts %}
+        <li>{{user}}</li>
+    {% endfor %}
+    </ul>
     """, accounts=accounts)
 
 if __name__ == "__main__":
