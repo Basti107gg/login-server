@@ -1,10 +1,11 @@
 # server.py
-from flask import Flask, request, jsonify, render_template_string, redirect
+from flask import Flask, request, jsonify, render_template_string, redirect, session
 import json
 import os
 import shutil
 
 app = Flask(__name__)
+app.secret_key = "MEGA_SECRET_KEY_123456"  # wichtig für login speichern
 
 DB_FILE = "accounts.json"
 BACKUP_FILE = "accounts_backup.json"
@@ -38,7 +39,7 @@ def save_accounts(data):
         os.fsync(f.fileno())
 
 # =========================
-# LOGIN API
+# LOGIN API (für Programme)
 # =========================
 @app.route("/login", methods=["POST"])
 def login():
@@ -53,12 +54,13 @@ def login():
     return jsonify({"status": "error"})
 
 # =========================
-# ADMIN LOGIN
+# ADMIN LOGIN (MIT SESSION)
 # =========================
 @app.route("/admin-login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
         if request.form.get("password") == ADMIN_PASSWORD:
+            session["admin"] = True   # 🔥 gespeichert
             return redirect("/admin")
         return "❌ Falsches Passwort"
 
@@ -71,10 +73,22 @@ def admin_login():
     """
 
 # =========================
-# ADMIN PANEL
+# LOGOUT
+# =========================
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/admin-login")
+
+# =========================
+# ADMIN PANEL (GESCHÜTZT)
 # =========================
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
+    # 🔒 Zugriff prüfen
+    if not session.get("admin"):
+        return redirect("/admin-login")
+
     accounts = load_accounts()
 
     if request.method == "POST" and "create" in request.form:
@@ -93,6 +107,8 @@ def admin():
 
     return render_template_string("""
     <h1>ADMIN PANEL</h1>
+
+    <a href="/logout">🔓 Logout</a>
 
     <h2>➕ Account erstellen</h2>
     <form method="post">
@@ -137,7 +153,7 @@ def admin():
 # =========================
 @app.route("/")
 def home():
-    return redirect("/admin-login")
+    return redirect("/admin")
 
 # =========================
 # START
