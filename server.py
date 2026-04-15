@@ -5,7 +5,7 @@ import os
 app = Flask(__name__)
 
 # =========================
-# LOKALE DATEI
+# DATEI (LOKAL + DAUERHAFT)
 # =========================
 DB_FILE = "accounts.json"
 
@@ -14,18 +14,18 @@ def load_accounts():
         with open(DB_FILE, "w") as f:
             json.dump({}, f)
 
-    with open(DB_FILE, "r") as f:
-        try:
+    try:
+        with open(DB_FILE, "r") as f:
             return json.load(f)
-        except:
-            return {}
+    except:
+        return {}
 
 def save_accounts(data):
     with open(DB_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
 # =========================
-# LOGIN
+# LOGIN API
 # =========================
 @app.route("/login", methods=["POST"])
 def login():
@@ -37,8 +37,8 @@ def login():
 
     if user in accounts and accounts[user] == pw:
         return jsonify({"status": "ok"})
-    else:
-        return jsonify({"status": "error"})
+
+    return jsonify({"status": "error"})
 
 # =========================
 # ADMIN PANEL
@@ -49,9 +49,8 @@ ADMIN_PASSWORD = "29a10C00"
 def admin():
     accounts = load_accounts()
 
+    # Admin check
     if request.method == "POST":
-
-        # Admin Schutz
         if request.form.get("admin") != ADMIN_PASSWORD:
             return "Wrong password", 403
 
@@ -71,6 +70,8 @@ def admin():
             if user in accounts:
                 del accounts[user]
                 save_accounts(accounts)
+
+    accounts = load_accounts()
 
     return render_template_string("""
     <h1>ADMIN PANEL</h1>
@@ -106,7 +107,7 @@ def admin():
     """, accounts=accounts)
 
 # =========================
-# START
+# START SERVER
 # =========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
