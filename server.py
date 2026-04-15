@@ -3,7 +3,6 @@ from flask import Flask, request, jsonify, render_template_string, redirect
 import json
 import os
 import shutil
-import time
 
 app = Flask(__name__)
 
@@ -13,7 +12,7 @@ BACKUP_FILE = "accounts_backup.json"
 ADMIN_PASSWORD = "29a10C00"
 
 # =========================
-# LOAD / SAVE
+# LOAD / SAVE (STABIL)
 # =========================
 def load_accounts():
     if not os.path.exists(DB_FILE):
@@ -39,7 +38,7 @@ def save_accounts(data):
         os.fsync(f.fileno())
 
 # =========================
-# LOGIN (MIT IP TRACKING)
+# LOGIN API
 # =========================
 @app.route("/login", methods=["POST"])
 def login():
@@ -49,20 +48,8 @@ def login():
 
     accounts = load_accounts()
 
-    if user in accounts and accounts[user]["password"] == pw:
-        ip = request.remote_addr
-        now = int(time.time())
-
-        # neue IP hinzufügen oder updaten
-        if ip not in accounts[user]["ips"]:
-            accounts[user]["ips"][ip] = now
-        else:
-            accounts[user]["ips"][ip] = now
-
-        save_accounts(accounts)
-
+    if user in accounts and accounts[user] == pw:
         return jsonify({"status": "ok"})
-
     return jsonify({"status": "error"})
 
 # =========================
@@ -96,10 +83,7 @@ def admin():
         pw = request.form.get("password")
 
         if user and pw:
-            accounts[user] = {
-                "password": pw,
-                "ips": {}
-            }
+            accounts[user] = pw
             save_accounts(accounts)
 
     # DELETE
@@ -108,8 +92,6 @@ def admin():
         if user in accounts:
             del accounts[user]
             save_accounts(accounts)
-
-    now = int(time.time())
 
     return render_template_string("""
     <h1>ADMIN PANEL</h1>
@@ -134,20 +116,11 @@ def admin():
     <h2>📦 Accounts</h2>
 
     <ul>
-    {% for user, data in accounts.items() %}
+    {% for user, pw in accounts.items() %}
         <li onclick="toggle('{{user}}')" style="cursor:pointer;">
             <b>{{user}}</b>
             <div id="{{user}}" style="display:none; margin-left:20px;">
-                Passwort: {{data.password}}<br>
-                IPs:<br>
-                {% for ip, last in data.ips.items() %}
-                    {% if now - last < 120 %}
-                        🟢 {{ip}} (aktiv)
-                    {% else %}
-                        ⚪ {{ip}}
-                    {% endif %}
-                    <br>
-                {% endfor %}
+                Passwort: {{pw}}
             </div>
         </li>
     {% endfor %}
@@ -159,10 +132,10 @@ def admin():
         el.style.display = (el.style.display === "none") ? "block" : "none";
     }
     </script>
-    """, accounts=accounts, now=now)
+    """, accounts=accounts)
 
 # =========================
-# HOME REDIRECT
+# HOME
 # =========================
 @app.route("/")
 def home():
