@@ -6,7 +6,7 @@ import requests
 app = Flask(__name__)
 
 # =========================
-# LOKALE DATEI (SICHER + DAUERHAFT)
+# LOKALE DATEI
 # =========================
 DB_FILE = "accounts.json"
 
@@ -26,7 +26,7 @@ def save_local(data):
         json.dump(data, f, indent=4)
 
 # =========================
-# GITHUB (PUBLIC READ ONLY)
+# GITHUB LOAD (READ ONLY)
 # =========================
 GITHUB_USER = "Basti107gg"
 GITHUB_REPO = "login-server"
@@ -34,11 +34,11 @@ GITHUB_FILE = "accounts.json"
 
 def load_github():
     try:
-        url = f"https://raw.githubusercontent.com/{Basti107gg}/{login-serve}/main/{Accounts.json}"
+        url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/{GITHUB_FILE}"
         r = requests.get(url, timeout=5)
 
         if r.status_code == 200:
-            return r.json()
+            return json.loads(r.text)
 
     except:
         pass
@@ -46,7 +46,7 @@ def load_github():
     return {}
 
 # =========================
-# ACCOUNTS MERGE (GITHUB + LOKAL)
+# MERGE
 # =========================
 def load_accounts():
     local = load_local()
@@ -57,7 +57,7 @@ def load_accounts():
     return merged
 
 # =========================
-# LOGIN SYSTEM
+# LOGIN
 # =========================
 @app.route("/login", methods=["POST"])
 def login():
@@ -73,34 +73,27 @@ def login():
     return jsonify({"status": "error"})
 
 # =========================
-# ADMIN PANEL
+# ADMIN
 # =========================
 ADMIN_PASSWORD = "29a10C00"
 
 @app.route("/", methods=["GET", "POST"])
 def admin():
-    accounts = load_accounts()
-
-    # Admin check
     if request.method == "POST":
         if request.form.get("admin") != ADMIN_PASSWORD:
             return "Wrong password", 403
 
         local = load_local()
 
-        # CREATE ACCOUNT
         if "create" in request.form:
             user = request.form.get("user")
             pw = request.form.get("pw")
-
             if user and pw:
                 local[user] = pw
                 save_local(local)
 
-        # DELETE ACCOUNT
         if "delete" in request.form:
             user = request.form.get("delete")
-
             if user in local:
                 del local[user]
                 save_local(local)
@@ -141,7 +134,7 @@ def admin():
     """, accounts=accounts)
 
 # =========================
-# START SERVER
+# START
 # =========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
