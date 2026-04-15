@@ -5,7 +5,7 @@ import os
 app = Flask(__name__)
 
 # =========================
-# LOCAL DATABASE
+# LOKALE DATEI
 # =========================
 DB_FILE = "accounts.json"
 
@@ -14,18 +14,18 @@ def load_accounts():
         with open(DB_FILE, "w") as f:
             json.dump({}, f)
 
-    try:
-        with open(DB_FILE, "r") as f:
+    with open(DB_FILE, "r") as f:
+        try:
             return json.load(f)
-    except:
-        return {}
+        except:
+            return {}
 
 def save_accounts(data):
     with open(DB_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
 # =========================
-# LOGIN API
+# LOGIN
 # =========================
 @app.route("/login", methods=["POST"])
 def login():
@@ -43,36 +43,51 @@ def login():
 # =========================
 # ADMIN PANEL
 # =========================
+ADMIN_PASSWORD = "29a10C00"
+
 @app.route("/", methods=["GET", "POST"])
 def admin():
     accounts = load_accounts()
 
     if request.method == "POST":
-        user = request.form.get("username")
-        pw = request.form.get("password")
 
-        if user and pw:
-            accounts[user] = pw
-            save_accounts(accounts)
+        # Admin Schutz
+        if request.form.get("admin") != ADMIN_PASSWORD:
+            return "Wrong password", 403
 
-        # DELETE (optional simple fix)
-        delete_user = request.form.get("delete")
-        if delete_user:
-            if delete_user in accounts:
-                del accounts[delete_user]
+        # CREATE
+        if "create" in request.form:
+            user = request.form.get("user")
+            pw = request.form.get("pw")
+
+            if user and pw:
+                accounts[user] = pw
+                save_accounts(accounts)
+
+        # DELETE
+        if "delete" in request.form:
+            user = request.form.get("delete")
+
+            if user in accounts:
+                del accounts[user]
                 save_accounts(accounts)
 
     return render_template_string("""
     <h1>ADMIN PANEL</h1>
 
-    <h2>Create Account</h2>
     <form method="post">
-        <input name="username" placeholder="Username"><br><br>
-        <input name="password" placeholder="Password"><br><br>
-        <button>Create</button>
+        <input name="admin" placeholder="Admin Passwort">
+        <button>Login</button>
     </form>
 
     <hr>
+
+    <h2>Create Account</h2>
+    <form method="post">
+        <input name="user" placeholder="Username">
+        <input name="pw" placeholder="Password">
+        <button name="create">Create</button>
+    </form>
 
     <h2>Delete Account</h2>
     <form method="post">
@@ -84,8 +99,8 @@ def admin():
 
     <h2>Accounts</h2>
     <ul>
-    {% for user in accounts %}
-        <li>{{user}} : {{accounts[user]}}</li>
+    {% for u in accounts %}
+        <li>{{u}} : {{accounts[u]}}</li>
     {% endfor %}
     </ul>
     """, accounts=accounts)
